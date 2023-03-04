@@ -32,15 +32,28 @@ func (b *DeclBuilder) WalkCommand(keys []Key, name string) {
 		keyOverride: "Command",
 	}
 	cmd := Key{
-		Key:     name,
+		Key:     name + "Command",
 		Type:    "<dictionary>",
 		SubKeys: []Key{payload, {Key: "CommandUUID", Type: "<string>"}},
 	}
 	b.handleKey(cmd)
 }
 
-func (b *DeclBuilder) Walk(keys []Key, name string) {
-	b.handleDict(keys, name)
+func (b *DeclBuilder) WalkResponse(keys []Key, name string) {
+	keys = append(keys,
+		Key{Key: "CommandUUID", Type: "<string>"},
+		Key{Key: "Status", Type: "<string>"},
+		// TODO:
+		// EnrollmentID
+		// EnrollmentUserID
+		// ErrorChain
+		// NotOnConsole
+		// UDID
+		// UserID
+		// UserLongName
+		// UserShortName
+	)
+	b.handleDict(keys, name+"Response")
 }
 
 func (b *DeclBuilder) handleKey(key Key) (string, string) {

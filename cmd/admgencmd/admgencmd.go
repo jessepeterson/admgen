@@ -60,8 +60,8 @@ func main() {
 
 	builder := &admgen.DeclBuilder{Decls: &decls}
 
-	builder.WalkCommand(cmd.PayloadKeys, cmd.Payload.RequestType+"Command")
-	builder.Walk(cmd.ResponseKeys, cmd.Payload.RequestType+"Response")
+	builder.WalkCommand(cmd.PayloadKeys, cmd.Payload.RequestType)
+	builder.WalkResponse(cmd.ResponseKeys, cmd.Payload.RequestType)
 
 	file := &ast.File{
 		Name:  ast.NewIdent(*flPkg),
