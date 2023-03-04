@@ -60,7 +60,7 @@ func main() {
 
 	builder := &admgen.DeclBuilder{Decls: &decls}
 
-	builder.Walk(cmd.PayloadKeys, cmd.Payload.RequestType+"Command")
+	builder.WalkCommand(cmd.PayloadKeys, cmd.Payload.RequestType+"Command")
 	builder.Walk(cmd.ResponseKeys, cmd.Payload.RequestType+"Response")
 
 	file := &ast.File{

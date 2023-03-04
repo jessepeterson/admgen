@@ -13,11 +13,30 @@ type Key struct {
 	Presence string `yaml:"presence,omitempty"`
 	SubKeys  []Key  `yaml:"subkeys,omitempty"`
 	Content  string `yaml:"content"`
+
+	// used to override the name (and plist key) of the field for a dictionary type
+	keyOverride string `yaml:"-"`
 }
 
 type DeclBuilder struct {
 	Decls     *[]ast.Decl
 	NeedsTime bool
+}
+
+func (b *DeclBuilder) WalkCommand(keys []Key, name string) {
+	keys = append(keys, Key{Key: "RequestType", Type: "<string>"})
+	payload := Key{
+		Key:         name + "Payload",
+		Type:        "<dictionary>",
+		SubKeys:     keys,
+		keyOverride: "Command",
+	}
+	cmd := Key{
+		Key:     name,
+		Type:    "<dictionary>",
+		SubKeys: []Key{payload, {Key: "CommandUUID", Type: "<string>"}},
+	}
+	b.handleKey(cmd)
 }
 
 func (b *DeclBuilder) Walk(keys []Key, name string) {
@@ -90,10 +109,16 @@ func (b *DeclBuilder) handleDict(keys []Key, name string) {
 		if key.Presence == "optional" {
 			omitempty = ",omitempty"
 		}
+		goFieldName := key.keyOverride
+		plistFieldName := key.keyOverride
+		if goFieldName == "" {
+			goFieldName = normalizeFieldName(key.Key)
+			plistFieldName = key.Key
+		}
 		f := &ast.Field{
-			Names: []*ast.Ident{ast.NewIdent(normalizeFieldName(key.Key))},
+			Names: []*ast.Ident{ast.NewIdent(goFieldName)},
 			Type:  ast.NewIdent(goType),
-			Tag:   &ast.BasicLit{Value: "`plist:\"" + key.Key + omitempty + "\"`"},
+			Tag:   &ast.BasicLit{Value: "`plist:\"" + plistFieldName + omitempty + "\"`"},
 		}
 		if comment != "" {
 			f.Comment = &ast.CommentGroup{List: []*ast.Comment{{Text: " // " + comment}}}
