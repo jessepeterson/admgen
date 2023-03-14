@@ -6,6 +6,7 @@ import (
 	"go/ast"
 	"go/format"
 	"go/token"
+	"io"
 	"os"
 
 	"github.com/jessepeterson/admgen"
@@ -29,6 +30,7 @@ type Command struct {
 
 func main() {
 	var flPkg = flag.String("pkg", "main", "Name of generated package")
+	var flOut = flag.String("o", "-", "output filename; \"-\" for stdout")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [flags] <yaml-file>\n", os.Args[0])
 		flag.PrintDefaults()
@@ -40,6 +42,16 @@ func main() {
 		fmt.Fprint(flag.CommandLine.Output(), "error: one YAML path required\n")
 		flag.Usage()
 		os.Exit(1)
+	}
+
+	var output io.Writer = os.Stdout
+	var err error
+	if *flOut != "-" {
+		output, err = os.OpenFile(*flOut, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0777)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error opening output file: %v\n", err)
+			os.Exit(2)
+		}
 	}
 
 	f, err := os.Open(flag.Args()[0])
@@ -84,7 +96,7 @@ func main() {
 	// https://github.com/golang/go/issues/18593
 	_ = fset.AddFile("", -1, 1)
 
-	err = format.Node(os.Stdout, fset, file)
+	err = format.Node(output, fset, file)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error formatting AST node: %v\n", err)
 		os.Exit(2)
