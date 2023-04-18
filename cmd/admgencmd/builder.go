@@ -9,10 +9,6 @@ import (
 
 type jenBuilder struct {
 	file *File
-	ptr  bool
-
-	noLegacyStructComment bool
-	tagChanged            bool // only use a tag if the name has changed
 }
 
 func newJenBuilder(pkgName string) *jenBuilder {
@@ -21,35 +17,76 @@ func newJenBuilder(pkgName string) *jenBuilder {
 	return j
 }
 
+var commandUUIDKey = Key{
+	Key:      "CommandUUID",
+	Type:     "<string>",
+	Presence: "required",
+}
+
 func (j *jenBuilder) walkCommand(keys []Key, name string) {
-	// j.file.Const().Id(name + "RequestType").Op("=").Lit(name)
-	keys = append(keys,
-		Key{Key: "RequestType", Type: "<string>"},
-		// Key{Key: "RequestRequiresNetworkTether", Type: "<boolean>", Presence: "optional"},
-	)
+	// create a "const" string of the RequestType for the command
+	j.file.Const().Id(name + "RequestType").Op("=").Lit(name)
+
+	requestTypeKey := Key{
+		Key:            "RequestType",
+		Type:           "<string>",
+		Presence:       "required",
+		Content:        "must be set to \"" + name + "\"",
+		includeContent: true,
+	}
+
+	networkTetherKey := Key{
+		Key:      "RequestRequiresNetworkTether",
+		Type:     "<boolean>",
+		Presence: "optional",
+	}
+
+	// insert the RequestType and 'NetworkTether fields into the keys.
+	// these aren't specified in the schema.
+	keys = append(keys, requestTypeKey, networkTetherKey)
+
+	// the command "payload" is the actual command data, one level up
+	// from the command.
 	payload := Key{
 		Key:         name + "Payload",
 		Type:        "<dictionary>",
 		SubKeys:     keys,
 		keyOverride: "Command",
+		Presence:    "required",
 	}
+
+	// finally put together the actual base-level MDM command struct
 	cmd := Key{
 		Key:     name + "Command",
 		Type:    "<dictionary>",
-		SubKeys: []Key{payload, {Key: "CommandUUID", Type: "<string>"}},
+		SubKeys: []Key{payload, commandUUIDKey},
 	}
-	j.handleKey(cmd)
-	// j.file.Comment("New" + cmd.Key + " creates ...")
-	// j.file.Func().Id("New" + cmd.Key).Params().Op("*").Id(cmd.Key).Block(
-	// 	Return(Op("&").Id(cmd.Key).Values()),
-	// )
+
+	// Go (hah) convert it to code now
+	j.handleKey(cmd, "")
+
+	// create a helper function to instantiate our command with the correct RequestType
+	j.file.Comment("New" + cmd.Key + " creates a new \"" + name + "\" Apple MDM command.")
+	j.file.Func().Id("New" + cmd.Key).Params().Op("*").Id(cmd.Key).Block(
+		Return(Op("&").Id(cmd.Key).Values(Dict{
+			Id("Command"): Id(payload.Key).Values(Dict{
+				Id("RequestType"): Id(name + "RequestType"),
+			}),
+		})),
+	)
 }
 
 func (j *jenBuilder) walkResponse(keys []Key, name string) {
+	statusKey := Key{
+		Key:      "Status",
+		Type:     "<string>",
+		Presence: "required",
+	}
 	keys = append(keys,
-		Key{Key: "CommandUUID", Type: "<string>"},
-		Key{Key: "Status", Type: "<string>"},
+		commandUUIDKey,
+		statusKey,
 		// TODO:
+		//
 		// EnrollmentID
 		// EnrollmentUserID
 		// ErrorChain
@@ -59,51 +96,45 @@ func (j *jenBuilder) walkResponse(keys []Key, name string) {
 		// UserLongName
 		// UserShortName
 	)
-	j.handleDict(keys, name+"Response")
-}
-
-func (j *jenBuilder) runPrint(keys []Key, name string) {
-	j.file.Const().Id(name + "RequestType").Op("=").Lit(name)
-	j.handleDict(keys, name)
-	j.file.Comment("New" + name + " creates ...")
-	j.file.Func().Id("New" + name).Params().Op("*").Id(name).Block(
-		Return(Op("&").Id(name).Values()),
-	)
-	fmt.Printf("%#v", j.file)
-}
-
-func (j *jenBuilder) handleKey(key Key) (*Statement, string) {
-	ptr := func(sin *Statement) (sout *Statement) {
-		if j.ptr {
-			return Op("*").Add(sin)
-		}
-		return sin
+	response := Key{
+		Key:     name + "Response",
+		SubKeys: keys,
+		Type:    "<dictionary>",
 	}
+	j.handleKey(response, "")
+}
+
+func (j *jenBuilder) handleKey(key Key, parentType string) (s *Statement, comment string) {
 	switch key.Type {
 	case "<string>":
-		return ptr(String()), ""
+		s = String()
 	case "<integer>":
-		return ptr(Int()), ""
+		s = Int()
 	case "<boolean>":
-		return ptr(Bool()), ""
+		s = Bool()
 	case "<real>":
-		return ptr(Float64()), ""
+		s = Float64()
 	case "<data>":
-		return ptr(Index().Byte()), ""
-	// case "<date>":
-	// 	return ptr(Qual("time", "Time")), ""
+		s = Index().Byte()
+	case "<date>":
+		s = Qual("time", "Time")
 	case "<dictionary>":
-		j.handleDict(key.SubKeys, key.Key)
-		return ptr(Id(key.Key)), ""
+		s, comment = j.handleDict(key)
 	case "<array>":
-		goType, comment := j.handleArray(key.SubKeys)
-		return Index().Add(goType), comment
+		s, comment = j.handleArray(key)
+		s = Index().Add(s)
 	default:
-		return nil, ""
+		s = Interface()
+		comment = "unknown type: " + key.Type
 	}
+	if parentType != "<array>" && s != nil && key.Presence != "required" {
+		s = Op("*").Add(s)
+	}
+	return
 }
 
-func (j *jenBuilder) handleArray(keys []Key) (*Statement, string) {
+func (j *jenBuilder) handleArray(key Key) (s *Statement, comment string) {
+	keys := key.SubKeys
 	if len(keys) < 1 {
 		return Interface(), "missing array keys in schema"
 	}
@@ -115,7 +146,7 @@ func (j *jenBuilder) handleArray(keys []Key) (*Statement, string) {
 		}
 	}
 
-	goType, comment := j.handleKey(keys[0])
+	s, comment = j.handleKey(keys[0], key.Type)
 	if len(keys) == 1 && keys[0].Type != "<dictionary>" && len(keys[0].SubKeys) > 0 {
 		// if our single key is a scalar type and we have subkeys
 		// then the the subkeys describe actual array values
@@ -124,49 +155,45 @@ func (j *jenBuilder) handleArray(keys []Key) (*Statement, string) {
 		}
 		comment += fmt.Sprintf("%d array values defined in schema", len(keys[0].SubKeys))
 	}
-	return goType, comment
+	return
 }
 
-func (j *jenBuilder) handleDict(keys []Key, name string) {
+func (j *jenBuilder) handleDict(key Key) (s *Statement, comment string) {
 	var fields []Code
-	for _, key := range keys {
-		goFieldName := normalizeFieldName(key.Key)
-		schemaFieldName := key.Key
-		if key.keyOverride != "" {
-			// fieldName = key.keyOverride
-			// goField
-			goFieldName = key.keyOverride
-			schemaFieldName = key.keyOverride
+	for _, k := range key.SubKeys {
+		s, comment := j.handleKey(k, key.Type)
+		if s == nil {
+			panic("handleKey should not have returned nil")
 		}
-		jenField := Id(goFieldName)
-		goType, comment := j.handleKey(key)
-		if goType == nil {
-			goType = Interface()
-			if comment != "" {
-				comment += ", "
-			}
-			comment = "unknown type: " + key.Type
+		fieldName := normalizeFieldName(k.Key)
+		if k.keyOverride != "" {
+			fieldName = k.keyOverride
 		}
-		jenField = jenField.Add(goType)
-		tag := schemaFieldName
-		if j.tagChanged && goFieldName == schemaFieldName {
-			tag = ""
+		jenField := Id(fieldName).Add(s)
+		var tag string
+		if k.keyOverride == "" && (k.Key != fieldName) {
+			tag = k.Key
 		}
-		if key.Presence == "optional" {
+		if k.Presence == "optional" {
 			tag += ",omitempty"
 		}
 		if tag != "" {
 			jenField.Tag(map[string]string{"plist": tag})
+		}
+		if k.includeContent {
+			if comment != "" {
+				comment += ", "
+			}
+			comment += k.Content
 		}
 		if comment != "" {
 			jenField.Comment(comment)
 		}
 		fields = append(fields, jenField)
 	}
-	if !j.noLegacyStructComment {
-		j.file.Comment(name)
-	}
-	j.file.Type().Id(name).Struct(fields...)
+	// create a new struct in the file with fields
+	j.file.Type().Id(key.Key).Struct(fields...)
+	return Id(key.Key), ""
 }
 
 func strip(s string) string {

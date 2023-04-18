@@ -18,7 +18,8 @@ type Key struct {
 	Content  string `yaml:"content"`
 
 	// used to override the name (and plist key) of the field for a dictionary type
-	keyOverride string `yaml:"-"`
+	keyOverride    string `yaml:"-"`
+	includeContent bool
 }
 
 // Payload represents the "payload" section defined in the Apple
