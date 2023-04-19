@@ -18,8 +18,11 @@ type Key struct {
 	Content  string `yaml:"content"`
 
 	// used to override the name (and plist key) of the field for a dictionary type
-	keyOverride    string `yaml:"-"`
+	keyOverride string `yaml:"-"`
+	// whether to include the Content (aka comment) on a field comment
 	includeContent bool
+	// whether this comment only applies to the struct itself
+	contentIsForStruct bool
 }
 
 // Payload represents the "payload" section defined in the Apple
@@ -40,18 +43,13 @@ type Command struct {
 func main() {
 	var flPkg = flag.String("pkg", "main", "Name of generated package")
 	var flOut = flag.String("o", "-", "output filename; \"-\" for stdout")
+	var flOmitShared = flag.Bool("omit-shared", false, "omit \"shared\" code (but depend on it)")
+	var flNoDepend = flag.Bool("no-depend", false, "do not depend on \"shared\"")
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [flags] <yaml-file>\n", os.Args[0])
 		flag.PrintDefaults()
 	}
 	flag.Parse()
-
-	if flag.NArg() != 1 {
-		// use flag Output() as this error is related to command line input
-		fmt.Fprint(flag.CommandLine.Output(), "error: one YAML path required\n")
-		flag.Usage()
-		os.Exit(1)
-	}
 
 	var output io.Writer = os.Stdout
 	var err error
@@ -63,28 +61,41 @@ func main() {
 		}
 	}
 
-	f, err := os.Open(flag.Args()[0])
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error reading YAML: %v\n", err)
-		os.Exit(2)
-	}
-
-	cmd := new(Command)
-
-	err = yaml.NewDecoder(f).Decode(cmd)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error decoding YAML: %v\n", err)
-		os.Exit(2)
-	}
-
 	j := newJenBuilder(*flPkg)
+	j.noDependShared = *flNoDepend
 
-	j.walkCommand(cmd.PayloadKeys, cmd.Payload.RequestType)
-	j.walkResponse(cmd.ResponseKeys, cmd.Payload.RequestType)
+	if !*flOmitShared {
+		j.createShared()
+	}
 
+	for _, arg := range flag.Args() {
+		f, err := os.Open(arg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error reading YAML: %v\n", err)
+			continue
+		}
+
+		cmd := new(Command)
+
+		err = yaml.NewDecoder(f).Decode(cmd)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error decoding YAML: %v\n", err)
+			continue
+		}
+
+		j.walkCommand(cmd.PayloadKeys, cmd.Payload.RequestType)
+		j.walkResponse(cmd.ResponseKeys, cmd.Payload.RequestType)
+
+		err = f.Close()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "error closing YAML: %v\n", err)
+			continue
+		}
+	}
 	err = j.file.Render(output)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error rendering output: %v\n", err)
 		os.Exit(2)
 	}
+
 }

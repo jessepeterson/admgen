@@ -9,6 +9,8 @@ import (
 
 type jenBuilder struct {
 	file *File
+
+	noDependShared bool
 }
 
 func newJenBuilder(pkgName string) *jenBuilder {
@@ -23,27 +25,70 @@ var commandUUIDKey = Key{
 	Presence: "required",
 }
 
+var requestTypeKey = Key{
+	Key:            "RequestType",
+	Type:           "<string>",
+	Presence:       "required",
+	Content:        "must be set to MDM command name",
+	includeContent: true,
+}
+
+var networkTetherKey = Key{
+	Key:      "RequestRequiresNetworkTether",
+	Type:     "<boolean>",
+	Presence: "optional",
+}
+
+func (j *jenBuilder) createShared() {
+	payload := Key{
+		Key:         "GenericCommandPayload",
+		keyOverride: "Command",
+		Type:        "<dictionary>",
+		Presence:    "required",
+
+		Content:            "GenericCommandPayload is the \"inner\" generic payload for Apple MDM commands.",
+		includeContent:     true,
+		contentIsForStruct: true,
+
+		SubKeys: []Key{requestTypeKey, networkTetherKey},
+	}
+	cmd := Key{
+		Key:      "GenericCommand",
+		Type:     "<dictionary>",
+		Presence: "required",
+
+		Content:            "GenericCommand represents a generic command.",
+		includeContent:     true,
+		contentIsForStruct: true,
+
+		SubKeys: []Key{
+			commandUUIDKey,
+			payload,
+		},
+	}
+	j.handleKey(cmd, "")
+
+	// create a helper function to instantiate our our generic command
+	j.file.Comment("New" + cmd.Key + " creates a new generic Apple MDM command.")
+	j.file.Func().Id("New" + cmd.Key).Params(Id("requestType").String()).Op("*").Id(cmd.Key).Block(
+		Return(Op("&").Id(cmd.Key).Values(Dict{
+			Id("Command"): Id(payload.Key).Values(Dict{
+				Id("RequestType"): Id("requestType"),
+			}),
+		})),
+	)
+}
+
 func (j *jenBuilder) walkCommand(keys []Key, name string) {
 	// create a "const" string of the RequestType for the command
 	j.file.Const().Id(name + "RequestType").Op("=").Lit(name)
 
-	requestTypeKey := Key{
-		Key:            "RequestType",
-		Type:           "<string>",
-		Presence:       "required",
-		Content:        "must be set to \"" + name + "\"",
-		includeContent: true,
-	}
-
-	networkTetherKey := Key{
-		Key:      "RequestRequiresNetworkTether",
-		Type:     "<boolean>",
-		Presence: "optional",
-	}
+	rtk := requestTypeKey
+	rtk.Content = "must be set to \"" + name + "\""
 
 	// insert the RequestType and 'NetworkTether fields into the keys.
 	// these aren't specified in the schema.
-	keys = append(keys, requestTypeKey, networkTetherKey)
+	keys = append(keys, rtk, networkTetherKey)
 
 	// the command "payload" is the actual command data, one level up
 	// from the command.
@@ -53,6 +98,10 @@ func (j *jenBuilder) walkCommand(keys []Key, name string) {
 		SubKeys:     keys,
 		keyOverride: "Command",
 		Presence:    "required",
+
+		Content:            name + "Payload is the \"inner\" command-specific payload for the \"" + name + "\" Apple MDM command.",
+		includeContent:     true,
+		contentIsForStruct: true,
 	}
 
 	// finally put together the actual base-level MDM command struct
@@ -60,10 +109,27 @@ func (j *jenBuilder) walkCommand(keys []Key, name string) {
 		Key:     name + "Command",
 		Type:    "<dictionary>",
 		SubKeys: []Key{payload, commandUUIDKey},
+
+		Content:            name + "Command is the top-level structure for the \"" + name + "\" Apple MDM command.",
+		includeContent:     true,
+		contentIsForStruct: true,
 	}
 
 	// Go (hah) convert it to code now
 	j.handleKey(cmd, "")
+
+	if !j.noDependShared {
+		// create a helper method to return a copy of a generic command
+		j.file.Comment("GenericCommand creates a new generic command using the values of c")
+		j.file.Func().Params(
+			Id("c").Op("*").Id(name+"Command"),
+		).Id("GenericCommand").Params().Op("*").Id("GenericCommand").Block(
+			Id("cmd").Op(":=").Id("NewGenericCommand").Call(Id("c.Command.RequestType")),
+			Id("cmd.CommandUUID").Op("=").Id("c.CommandUUID"),
+			Id("cmd.Command.RequestRequiresNetworkTether").Op("=").Id("c.Command.RequestRequiresNetworkTether"),
+			Return(Id("cmd")),
+		)
+	}
 
 	// create a helper function to instantiate our command with the correct RequestType
 	j.file.Comment("New" + cmd.Key + " creates a new \"" + name + "\" Apple MDM command.")
@@ -180,7 +246,7 @@ func (j *jenBuilder) handleDict(key Key) (s *Statement, comment string) {
 		if tag != "" {
 			jenField.Tag(map[string]string{"plist": tag})
 		}
-		if k.includeContent {
+		if k.includeContent && !k.contentIsForStruct {
 			if comment != "" {
 				comment += ", "
 			}
@@ -190,6 +256,9 @@ func (j *jenBuilder) handleDict(key Key) (s *Statement, comment string) {
 			jenField.Comment(comment)
 		}
 		fields = append(fields, jenField)
+	}
+	if key.includeContent && key.contentIsForStruct {
+		j.file.Comment(key.Content)
 	}
 	// create a new struct in the file with fields
 	j.file.Type().Id(key.Key).Struct(fields...)
