@@ -430,7 +430,7 @@ func (j *jenBuilder) handleArray(key Key) (s *Statement, comment string) {
 		if comment != "" {
 			comment += ", "
 		}
-		comment += fmt.Sprintf("%d array values defined in schema", len(keys[0].SubKeys))
+		comment += fmt.Sprintf("%d array value(s) defined in schema", len(keys[0].SubKeys))
 	}
 	return
 }
