@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 
 	"gopkg.in/yaml.v3"
 )
@@ -64,7 +65,12 @@ func main() {
 		}
 	}
 
-	j := newJenBuilder(*flPkg)
+	var sources []string
+	for _, arg := range flag.Args() {
+		sources = append(sources, filepath.Base(arg))
+	}
+
+	j := newJenBuilder(*flPkg, sources)
 	j.noDependShared = *flNoDepend
 	j.noResponses = *flNoResponses
 
