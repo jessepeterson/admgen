@@ -85,13 +85,22 @@ func (j *jenBuilder) createShared() {
 	)
 
 	j.file.Var().Id("newCommandFuncs").Map(String()).Func().Params().Interface().Op("=").Make(Map(String()).Func().Params().Interface())
+	j.file.Var().Id("newResponseFuncs").Map(String()).Func().Params().Interface().Op("=").Make(Map(String()).Func().Params().Interface())
 
 	// create a helper function to instantiate a command
 	j.file.Comment("NewCommand creates a new command from requestType.")
 	j.file.Func().Id("NewCommand").Params(Id("requestType").String()).Interface().Block(
-		List(Id("cmdFn"), Id("ok")).Op(":=").Id("newCommandFuncs").Index(Id("requestType")),
-		If(Id("!ok").Op("||").Id("cmdFn").Op("==").Nil()).Block(Return(Nil())),
-		Return(Id("cmdFn").Call()),
+		List(Id("newCmdFn"), Id("ok")).Op(":=").Id("newCommandFuncs").Index(Id("requestType")),
+		If(Id("!ok").Op("||").Id("newCmdFn").Op("==").Nil()).Block(Return(Nil())),
+		Return(Id("newCmdFn").Call()),
+	)
+
+	// create a helper function to instantiate a command
+	j.file.Comment("NewResponse creates a new command response from requestType.")
+	j.file.Func().Id("NewResponse").Params(Id("requestType").String()).Interface().Block(
+		List(Id("newRespFn"), Id("ok")).Op(":=").Id("newResponseFuncs").Index(Id("requestType")),
+		If(Id("!ok").Op("||").Id("newRespFn").Op("==").Nil()).Block(Return(Nil())),
+		Return(Id("newRespFn").Call()),
 	)
 }
 
@@ -195,6 +204,17 @@ func (j *jenBuilder) walkResponse(keys []Key, name string) {
 		Type:    "<dictionary>",
 	}
 	j.handleKey(response, "")
+
+	// create a helper function for instantiating response structs
+	if !j.noDependShared {
+		j.file.Line()
+		j.file.Func().Id("init").Params().Block(
+			Comment("associate our Request Type to a function for creating a response of that type"),
+			Id("newResponseFuncs").Index(Id(name+"RequestType")).Op("=").Func().Params().Interface().Block(
+				Return(New(Id(response.Key))),
+			),
+		)
+	}
 }
 
 func (j *jenBuilder) handleKey(key Key, parentType string) (s *Statement, comment string) {
