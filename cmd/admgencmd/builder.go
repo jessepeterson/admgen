@@ -113,6 +113,39 @@ func (j *jenBuilder) createShared() {
 			If(Id("!ok").Op("||").Id("newRespFn").Op("==").Nil()).Block(Return(Nil())),
 			Return(Id("newRespFn").Call()),
 		)
+
+		errorChain := Key{
+			Key:  "ErrorChain",
+			Type: "<dictionary>",
+			SubKeys: []Key{
+				{Key: "ErrorCode", Type: "<integer>", Presence: "required"},
+				{Key: "ErrorDomain", Type: "<string>", Presence: "required"},
+				{Key: "LocalizedDescription", Type: "<string>", Presence: "required"},
+				{Key: "USEnglishDescription", Type: "<string>", Presence: "required"},
+			},
+			Content:            "ErrorChain represents errors that occured on the client executing an MDM command.",
+			includeContent:     true,
+			contentIsForStruct: true,
+		}
+		j.handleKey(errorChain, "")
+
+		enrollment := Key{
+			Key:  "Enrollment",
+			Type: "<dictionary>",
+			SubKeys: []Key{
+				{Key: "UDID", Type: "<string>", Presence: "optional"},
+				{Key: "UserID", Type: "<string>", Presence: "optional"},
+				{Key: "UserShortName", Type: "<string>", Presence: "optional"},
+				{Key: "UserLongName", Type: "<string>", Presence: "optional"},
+				{Key: "EnrollmentID", Type: "<string>", Presence: "optional"},
+				{Key: "EnrollmentUserID", Type: "<string>", Presence: "optional"},
+			},
+			Content:            "Enrollment represents the various enrollment-related data sent with responses.",
+			includeContent:     true,
+			contentIsForStruct: true,
+		}
+
+		j.handleKey(enrollment, "")
 	}
 }
 
@@ -196,20 +229,38 @@ func (j *jenBuilder) walkResponse(keys []Key, name string) {
 		Type:     "<string>",
 		Presence: "required",
 	}
+	notCons := Key{
+		Key:      "NotOnConsole",
+		Type:     "<boolean>",
+		Presence: "required", // marked as required in Apple docs site but no schema data to confirm this
+	}
 	keys = append(keys,
 		commandUUIDKey,
 		statusKey,
-		// TODO:
-		//
-		// EnrollmentID
-		// EnrollmentUserID
-		// ErrorChain
-		// NotOnConsole
-		// UDID
-		// UserID
-		// UserLongName
-		// UserShortName
+		notCons,
 	)
+	if !j.noDependShared {
+		errorChain := Key{
+			Key:      "ErrorChain",
+			Type:     "<array>",
+			Presence: "optional",
+			SubKeys: []Key{
+				{
+					Key:          "ErrorChain",
+					Type:         "ErrorChain",
+					forceRawType: true,
+				},
+			},
+		}
+		enrollment := Key{
+			Key:            "Enrollment",
+			Type:           "Enrollment",
+			Presence:       "required",
+			forceRawType:   true,
+			embeddedStruct: true,
+		}
+		keys = append(keys, errorChain, enrollment)
+	}
 	response := Key{
 		Key:     name + "Response",
 		SubKeys: keys,
@@ -249,8 +300,12 @@ func (j *jenBuilder) handleKey(key Key, parentType string) (s *Statement, commen
 		s, comment = j.handleArray(key)
 		s = Index().Add(s)
 	default:
-		s = Interface()
-		comment = "unknown type: " + key.Type
+		if key.forceRawType {
+			s = Id(key.Type)
+		} else {
+			s = Interface()
+			comment = "unknown type: " + key.Type
+		}
 	}
 	if parentType != "<array>" && s != nil && key.Presence != "required" {
 		s = Op("*").Add(s)
@@ -294,7 +349,12 @@ func (j *jenBuilder) handleDict(key Key) (s *Statement, comment string) {
 		if k.keyOverride != "" {
 			fieldName = k.keyOverride
 		}
-		jenField := Id(fieldName).Add(s)
+		var jenField *Statement
+		if !k.embeddedStruct {
+			jenField = Id(fieldName).Add(s)
+		} else {
+			jenField = s
+		}
 		var tag string
 		if k.keyOverride == "" && (k.Key != fieldName) {
 			tag = k.Key

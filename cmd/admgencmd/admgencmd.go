@@ -19,11 +19,16 @@ type Key struct {
 	Content  string `yaml:"content"`
 
 	// used to override the name (and plist key) of the field for a dictionary type
-	keyOverride string `yaml:"-"`
+	keyOverride string
 	// whether to include the Content (aka comment) on a field comment
 	includeContent bool
 	// whether this comment only applies to the struct itself
 	contentIsForStruct bool
+	// force this Go type for the key
+	forceRawType bool
+	// this field, if in a struct, should be another embedded struct.
+	// used with forceRawType.
+	embeddedStruct bool
 }
 
 // Payload represents the "payload" section defined in the Apple
