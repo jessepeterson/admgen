@@ -11,6 +11,7 @@ type jenBuilder struct {
 	file *File
 
 	noDependShared bool
+	noResponses    bool
 }
 
 func newJenBuilder(pkgName string) *jenBuilder {
@@ -85,7 +86,9 @@ func (j *jenBuilder) createShared() {
 	)
 
 	j.file.Var().Id("newCommandFuncs").Map(String()).Func().Params().Interface().Op("=").Make(Map(String()).Func().Params().Interface())
-	j.file.Var().Id("newResponseFuncs").Map(String()).Func().Params().Interface().Op("=").Make(Map(String()).Func().Params().Interface())
+	if !j.noResponses {
+		j.file.Var().Id("newResponseFuncs").Map(String()).Func().Params().Interface().Op("=").Make(Map(String()).Func().Params().Interface())
+	}
 
 	// create a helper function to instantiate a command
 	j.file.Comment("NewCommand creates a new command from requestType.")
@@ -95,13 +98,15 @@ func (j *jenBuilder) createShared() {
 		Return(Id("newCmdFn").Call()),
 	)
 
-	// create a helper function to instantiate a command
-	j.file.Comment("NewResponse creates a new command response from requestType.")
-	j.file.Func().Id("NewResponse").Params(Id("requestType").String()).Interface().Block(
-		List(Id("newRespFn"), Id("ok")).Op(":=").Id("newResponseFuncs").Index(Id("requestType")),
-		If(Id("!ok").Op("||").Id("newRespFn").Op("==").Nil()).Block(Return(Nil())),
-		Return(Id("newRespFn").Call()),
-	)
+	if !j.noResponses {
+		// create a helper function to instantiate a command
+		j.file.Comment("NewResponse creates a new command response from requestType.")
+		j.file.Func().Id("NewResponse").Params(Id("requestType").String()).Interface().Block(
+			List(Id("newRespFn"), Id("ok")).Op(":=").Id("newResponseFuncs").Index(Id("requestType")),
+			If(Id("!ok").Op("||").Id("newRespFn").Op("==").Nil()).Block(Return(Nil())),
+			Return(Id("newRespFn").Call()),
+		)
+	}
 }
 
 func (j *jenBuilder) walkCommand(keys []Key, name string) {

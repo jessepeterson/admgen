@@ -41,10 +41,13 @@ type Command struct {
 }
 
 func main() {
-	var flPkg = flag.String("pkg", "main", "Name of generated package")
-	var flOut = flag.String("o", "-", "output filename; \"-\" for stdout")
-	var flOmitShared = flag.Bool("omit-shared", false, "omit \"shared\" code (but depend on it)")
-	var flNoDepend = flag.Bool("no-depend", false, "do not depend on \"shared\"")
+	var (
+		flPkg         = flag.String("pkg", "main", "Name of generated package")
+		flOut         = flag.String("o", "-", "output filename; \"-\" for stdout")
+		flNoShared    = flag.Bool("no-shared", false, "no \"shared\" code (but depend on it)")
+		flNoDepend    = flag.Bool("no-depend", false, "do not depend on \"shared\"")
+		flNoResponses = flag.Bool("no-responses", false, "do not generate command responses")
+	)
 	flag.Usage = func() {
 		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [flags] <yaml-file>\n", os.Args[0])
 		flag.PrintDefaults()
@@ -63,8 +66,9 @@ func main() {
 
 	j := newJenBuilder(*flPkg)
 	j.noDependShared = *flNoDepend
+	j.noResponses = *flNoResponses
 
-	if !*flOmitShared {
+	if !*flNoShared {
 		j.createShared()
 	}
 
@@ -84,7 +88,9 @@ func main() {
 		}
 
 		j.walkCommand(cmd.PayloadKeys, cmd.Payload.RequestType)
-		j.walkResponse(cmd.ResponseKeys, cmd.Payload.RequestType)
+		if !*flNoResponses {
+			j.walkResponse(cmd.ResponseKeys, cmd.Payload.RequestType)
+		}
 
 		err = f.Close()
 		if err != nil {
