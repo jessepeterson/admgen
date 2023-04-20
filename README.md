@@ -2,6 +2,9 @@
 
 Package `admgen` and its related commands generate Go code from the [Apple Device Management schema data](https://github.com/apple/device-management).
 
+[![Go Reference](https://pkg.go.dev/badge/github.com/jessepeterson/admgen.svg)](https://pkg.go.dev/github.com/jessepeterson/admgen)
+
+
 ## Example
 
 For example assuming you had the Apple repository checked out in `./device-management` of this repo, you could:
