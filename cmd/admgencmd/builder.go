@@ -83,6 +83,16 @@ func (j *jenBuilder) createShared() {
 			}),
 		})),
 	)
+
+	j.file.Var().Id("newCommandFuncs").Map(String()).Func().Params().Interface().Op("=").Make(Map(String()).Func().Params().Interface())
+
+	// create a helper function to instantiate a command
+	j.file.Comment("NewCommand creates a new command from requestType.")
+	j.file.Func().Id("NewCommand").Params(Id("requestType").String()).Interface().Block(
+		List(Id("cmdFn"), Id("ok")).Op(":=").Id("newCommandFuncs").Index(Id("requestType")),
+		If(Id("!ok").Op("||").Id("cmdFn").Op("==").Nil()).Block(Return(Nil())),
+		Return(Id("cmdFn").Call()),
+	)
 }
 
 func (j *jenBuilder) walkCommand(keys []Key, name string) {
@@ -146,6 +156,17 @@ func (j *jenBuilder) walkCommand(keys []Key, name string) {
 			}),
 		})),
 	)
+
+	// create a helper function for instantiating command structs
+	if !j.noDependShared {
+		j.file.Line()
+		j.file.Func().Id("init").Params().Block(
+			Comment("associate our Request Type to a function for creating a command of that type"),
+			Id("newCommandFuncs").Index(Id(name+"RequestType")).Op("=").Func().Params().Interface().Block(
+				Return(Id("New"+cmd.Key).Call()),
+			),
+		)
+	}
 }
 
 func (j *jenBuilder) walkResponse(keys []Key, name string) {
