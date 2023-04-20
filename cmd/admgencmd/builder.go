@@ -68,6 +68,12 @@ func (j *jenBuilder) createShared() {
 	}
 	j.handleKey(cmd, "")
 
+	// create the interface for the generic command
+	j.file.Comment("GenericCommanders can extract a GenericCommand.")
+	j.file.Type().Id("GenericCommander").Interface(
+		Id("GenericCommand").Params().Op("*").Id("GenericCommand"),
+	)
+
 	// create a helper function to instantiate our our generic command
 	j.file.Comment("New" + cmd.Key + " creates a new generic Apple MDM command.")
 	j.file.Func().Id("New" + cmd.Key).Params(Id("requestType").String()).Op("*").Id(cmd.Key).Block(
