@@ -10,42 +10,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// Key represents the "key" type of the Apple Device Management YAML.
-type Key struct {
-	Key      string `yaml:"key"`
-	Type     string `yaml:"type"`
-	Presence string `yaml:"presence,omitempty"`
-	SubKeys  []Key  `yaml:"subkeys,omitempty"`
-	Content  string `yaml:"content"`
-
-	// used to override the name (and plist key) of the field for a dictionary type
-	keyOverride string
-	// whether to include the Content (aka comment) on a field comment
-	includeContent bool
-	// whether this comment only applies to the struct itself
-	contentIsForStruct bool
-	// force this Go type for the key
-	forceRawType bool
-	// this field, if in a struct, should be another embedded struct.
-	// used with forceRawType.
-	embeddedStruct bool
-}
-
-// Payload represents the "payload" section defined in the Apple
-// Device Management YAML.
-type Payload struct {
-	RequestType string `yaml:"requesttype"`
-	Content     string `yaml:"content"`
-}
-
-// Command represents an entire MDM command defined in the Apple
-// Device Management YAML.
-type Command struct {
-	Payload      Payload `yaml:"payload"`
-	PayloadKeys  []Key   `yaml:"payloadkeys"`
-	ResponseKeys []Key   `yaml:"responsekeys"`
-}
-
 func main() {
 	var (
 		flPkg         = flag.String("pkg", "main", "Name of generated package")
@@ -75,9 +39,7 @@ func main() {
 		sources = append(sources, filepath.Base(arg))
 	}
 
-	j := newJenBuilder(*flPkg, sources)
-	j.noDependShared = *flNoDepend
-	j.noResponses = *flNoResponses
+	j := newJenBuilder(*flPkg, sources, *flNoShared, *flNoDepend, *flNoResponses)
 
 	if !*flNoShared {
 		j.createShared()
