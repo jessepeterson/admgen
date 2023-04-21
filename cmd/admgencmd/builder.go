@@ -9,11 +9,12 @@ import (
 
 // Key represents the "key" type of the Apple Device Management YAML.
 type Key struct {
-	Key      string `yaml:"key"`
-	Type     string `yaml:"type"`
-	Presence string `yaml:"presence,omitempty"`
-	SubKeys  []Key  `yaml:"subkeys,omitempty"`
-	Content  string `yaml:"content"`
+	Key       string   `yaml:"key"`
+	Type      string   `yaml:"type"`
+	Presence  string   `yaml:"presence,omitempty"`
+	SubKeys   []Key    `yaml:"subkeys,omitempty"`
+	Content   string   `yaml:"content"`
+	RangeList []string `yaml:"rangelist,omitempty"`
 
 	// used to override the name (and plist key) of the field for a dictionary type
 	keyOverride string
@@ -342,6 +343,10 @@ func (j *jenBuilder) walkResponse(keys []Key, name string) {
 		Key:     name + "Response",
 		Type:    "<dictionary>",
 		SubKeys: keys,
+
+		Content:            name + "Response is the command result report (response) for the \"" + name + "\" Apple MDM command.",
+		includeContent:     true,
+		contentIsForStruct: true,
 	}
 	if j.noDependShared {
 		response.SubKeys = append(response.SubKeys,
@@ -392,6 +397,20 @@ func (j *jenBuilder) handleKey(key Key, parentType string) (s *Statement, commen
 	case "<date>":
 		s = Qual("time", "Time")
 	case "<dictionary>":
+		if len(key.SubKeys) == 1 {
+			k := key.SubKeys[0]
+			switch k.Type {
+			case "<dictionary>":
+				_, comment := j.handleDict(k)
+				if comment != "" {
+					comment += ", "
+				}
+				comment += "assuming string map for single dictionary subkey"
+				return Map(String()).Op("*").Id(k.Key), comment
+			case "<any>":
+				return Interface(), "<any> type as single dictionary subkey"
+			}
+		}
 		s, comment = j.handleDict(key)
 	case "<array>":
 		s, comment = j.handleArray(key)
@@ -403,6 +422,12 @@ func (j *jenBuilder) handleKey(key Key, parentType string) (s *Statement, commen
 			s = Interface()
 			comment = "unknown type: " + key.Type
 		}
+	}
+	if len(key.RangeList) >= 1 {
+		if comment != "" {
+			comment += ", "
+		}
+		comment += "possible values: " + strings.Join(key.RangeList, ", ")
 	}
 	if parentType != "<array>" && s != nil && key.Presence != "required" {
 		s = Op("*").Add(s)
@@ -423,10 +448,24 @@ func (j *jenBuilder) handleArray(key Key) (s *Statement, comment string) {
 		}
 	}
 
+	if keyType == "<dictionary>" && len(keys) > 1 {
+		var items []string
+		for _, k := range keys {
+			items = append(items, k.Key)
+			k.contentIsForStruct = true
+			k.includeContent = true
+			// note we're overwriting the comment (Content) in the yaml
+			k.Content = key.Key + " array type"
+
+			j.handleKey(k, "")
+		}
+		return Interface(), "array of dictionary keys, instantiate and populate items, keys: " + strings.Join(items, ", ")
+	}
+
 	s, comment = j.handleKey(keys[0], key.Type)
 	if len(keys) == 1 && keys[0].Type != "<dictionary>" && len(keys[0].SubKeys) > 0 {
 		// if our single key is a scalar type and we have subkeys
-		// then the the subkeys describe actual array values
+		// then the subkeys describe actual array values
 		if comment != "" {
 			comment += ", "
 		}
