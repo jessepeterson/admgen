@@ -103,9 +103,10 @@ var networkTetherKey = Key{
 }
 
 var statusKey = Key{
-	Key:      "Status",
-	Type:     "<string>",
-	Presence: "required",
+	Key:       "Status",
+	Type:      "<string>",
+	Presence:  "required",
+	RangeList: []string{"Acknowledged", "Error", "CommandFormatError", "Idle", "NotNow"},
 }
 
 var notConsKey = Key{
