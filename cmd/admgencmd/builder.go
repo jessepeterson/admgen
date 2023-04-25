@@ -170,6 +170,12 @@ func (j *jenBuilder) createShared() {
 		Id("GenericCommand").Params().Op("*").Id("GenericCommand"),
 	)
 
+	// create the interface for getting the generic response
+	j.file.Comment("GenericResponsers can extract a GenericResponse.")
+	j.file.Type().Id("GenericResponser").Interface(
+		Id("GetGenericResponse").Params().Op("*").Id("GenericResponse"),
+	)
+
 	// create a helper function to instantiate our our generic command
 	j.file.Comment("New" + cmd.Key + " creates a new generic Apple MDM command.")
 	j.file.Func().Id("New" + cmd.Key).Params(Id("requestType").String()).Op("*").Id(cmd.Key).Block(
@@ -306,7 +312,7 @@ func (j *jenBuilder) walkCommand(keys []Key, name string) {
 
 	if !j.noDependShared {
 		// create a helper method to return a copy of a generic command
-		j.file.Comment("GenericCommand creates a new generic command using the values of c")
+		j.file.Comment("GenericCommand creates a new generic command using the values of c.")
 		j.file.Func().Params(
 			Id("c").Op("*").Id(name+"Command"),
 		).Id("GenericCommand").Params().Op("*").Id("GenericCommand").Block(
@@ -370,6 +376,20 @@ func (j *jenBuilder) walkResponse(keys []Key, name string) {
 		)
 	}
 	j.handleKey(response, "")
+
+	if !j.noDependShared {
+		// create a helper method to return a copy of a generic command
+		j.file.Comment("GetGenericResponse creates a new generic command response using the values of r.")
+		j.file.Func().Params(
+			Id("r").Op("*").Id(response.Key),
+		).Id("GetGenericResponse").Params().Op("*").Id("GenericResponse").Block(
+			// Id("cmd").Op(":=").Id("NewGenericCommand").Call(Id("c.Command.RequestType")),
+			// Id("cmd.CommandUUID").Op("=").Id("c.CommandUUID"),
+			// Id("cmd.Command.RequestRequiresNetworkTether").Op("=").Id("c.Command.RequestRequiresNetworkTether"),
+			// Return(Id("cmd")),
+			Return(Op("&").Id("r.GenericResponse")),
+		)
+	}
 
 	// create a helper function for instantiating response structs
 	if !j.noDependShared {
