@@ -88,12 +88,16 @@ var commandUUIDKey = Key{
 	Presence: "required",
 }
 
-var requestTypeKey = Key{
-	Key:            "RequestType",
-	Type:           "<string>",
-	Presence:       "required",
-	Content:        "must be set to MDM command name",
-	includeContent: true,
+func NewRequestTypeKey(name string) Key {
+	if name == "" {
+		name = "the MDM command name"
+	}
+	return Key{
+		Key:       "RequestType",
+		Type:      "<string>",
+		Presence:  "required",
+		RangeList: []string{name},
+	}
 }
 
 var networkTetherKey = Key{
@@ -146,7 +150,7 @@ func (j *jenBuilder) createShared() {
 		includeContent:     true,
 		contentIsForStruct: true,
 
-		SubKeys: []Key{requestTypeKey, networkTetherKey},
+		SubKeys: []Key{NewRequestTypeKey(""), networkTetherKey},
 	}
 	cmd := Key{
 		Key:      "GenericCommand",
@@ -280,12 +284,12 @@ func (j *jenBuilder) walkCommand(keys []Key, name string) {
 			contentIsForStruct: true,
 		}
 
-		rtk := requestTypeKey
-		rtk.Content = "must be set to \"" + name + "\""
-
 		// insert the RequestType and 'NetworkTether fields into the keys.
 		// these aren't specified in the schema.
-		payload.SubKeys = append(payload.SubKeys, rtk, networkTetherKey)
+		payload.SubKeys = append(payload.SubKeys,
+			NewRequestTypeKey(name),
+			networkTetherKey,
+		)
 	} else {
 		payload = Key{
 			Key:          "GenericCommandPayload",
@@ -448,7 +452,11 @@ func (j *jenBuilder) handleKey(key Key, parentType string) (s *Statement, commen
 		if comment != "" {
 			comment += ", "
 		}
-		comment += "possible values: " + strings.Join(key.RangeList, ", ")
+		begin := "supported value"
+		if len(key.RangeList) > 1 {
+			begin += "s"
+		}
+		comment += begin + ": " + strings.Join(key.RangeList, ", ")
 	}
 	if parentType != "<array>" && s != nil && key.Presence != "required" {
 		s = Op("*").Add(s)
