@@ -203,6 +203,12 @@ func (j *jenBuilder) createShared() {
 		Return(Id("newCmdFn").Call()),
 	)
 
+	j.file.Comment("ValidRequestType checks that we are able to create a new command from requestType.")
+	j.file.Func().Id("ValidRequestType").Params(Id("requestType").String()).Bool().Block(
+		List(Id("_"), Id("ok")).Op(":=").Id("newCommandFuncs").Index(Id("requestType")),
+		Return(Id("ok")),
+	)
+
 	if !j.noResponses {
 		// create a helper function to instantiate a command
 		j.file.Comment("NewResponse creates a new command response from requestType.")
