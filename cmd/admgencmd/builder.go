@@ -190,17 +190,17 @@ func (j *jenBuilder) createShared() {
 		})),
 	)
 
-	j.file.Var().Id("newCommandFuncs").Map(String()).Func().Params().Interface().Op("=").Make(Map(String()).Func().Params().Interface())
+	j.file.Var().Id("newCommandFuncs").Map(String()).Func().Params(String()).Interface().Op("=").Make(Map(String()).Func().Params(String()).Interface())
 	if !j.noResponses {
 		j.file.Var().Id("newResponseFuncs").Map(String()).Func().Params().Interface().Op("=").Make(Map(String()).Func().Params().Interface())
 	}
 
 	// create a helper function to instantiate a command
 	j.file.Comment("NewCommand creates a new command from requestType.")
-	j.file.Func().Id("NewCommand").Params(Id("requestType").String()).Interface().Block(
+	j.file.Func().Id("NewCommand").Params(Id("requestType").String(), Id("uuid").String()).Interface().Block(
 		List(Id("newCmdFn"), Id("ok")).Op(":=").Id("newCommandFuncs").Index(Id("requestType")),
 		If(Id("!ok").Op("||").Id("newCmdFn").Op("==").Nil()).Block(Return(Nil())),
-		Return(Id("newCmdFn").Call()),
+		Return(Id("newCmdFn").Call(Id("uuid"))),
 	)
 
 	j.file.Comment("ValidRequestType checks that we are able to create a new command from requestType.")
@@ -335,11 +335,12 @@ func (j *jenBuilder) walkCommand(keys []Key, name string) {
 
 	// create a helper function to instantiate our command with the correct RequestType
 	j.file.Comment("New" + cmd.Key + " creates a new \"" + name + "\" Apple MDM command.")
-	j.file.Func().Id("New" + cmd.Key).Params().Op("*").Id(cmd.Key).Block(
+	j.file.Func().Id("New" + cmd.Key).Params(Id("uuid").String()).Op("*").Id(cmd.Key).Block(
 		Return(Op("&").Id(cmd.Key).Values(Dict{
 			Id("Command"): Id(payload.Key).Values(Dict{
 				Id("RequestType"): Id(name + "RequestType"),
 			}),
+			Id("CommandUUID"): Id("uuid"),
 		})),
 	)
 
@@ -348,8 +349,8 @@ func (j *jenBuilder) walkCommand(keys []Key, name string) {
 		j.file.Line()
 		j.file.Func().Id("init").Params().Block(
 			Comment("associate our Request Type to a function for creating a command of that type"),
-			Id("newCommandFuncs").Index(Id(name+"RequestType")).Op("=").Func().Params().Interface().Block(
-				Return(Id("New"+cmd.Key).Call()),
+			Id("newCommandFuncs").Index(Id(name+"RequestType")).Op("=").Func().Params(Id("uuid").String()).Interface().Block(
+				Return(Id("New"+cmd.Key).Call(Id("uuid"))),
 			),
 		)
 	}
