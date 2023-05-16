@@ -148,6 +148,9 @@ func insertErrorChain(j *jenBuilder) {
 			If(Id("s").Op("!=").Lit("")).Block(
 				Id("s").Op("+=").Lit(": "),
 			),
+			Comment("not intentionally trying to be US-centric here. however,"),
+			Comment("the searchability of error messages is often more successful"),
+			Comment("with the US english versions"),
 			Id("errStr").Op(":=").Parens(Op("*").Id("ec")).Index(Id("i")).Dot("USEnglishDescription"),
 			If(Id("errStr").Op("==").Lit("")).Block(
 				Id("errStr").Op("=").Parens(Op("*").Id("ec")).Index(Id("i")).Dot("LocalizedDescription"),
