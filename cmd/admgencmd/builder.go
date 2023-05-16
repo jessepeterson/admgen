@@ -127,10 +127,10 @@ var errorChainKey = Key{
 }
 
 func insertErrorChain(j *jenBuilder) {
-	j.handleKey(chainError, "")
+	j.handleKey(errorChainItem, "")
 
 	j.file.Comment("ErrorChain represents any errors that occured on the client executing an MDM command.")
-	j.file.Type().Id("ErrorChain").Index().Id("ChainError")
+	j.file.Type().Id("ErrorChain").Index().Id("ErrorChainItem")
 }
 
 var enrollmentKey = Key{
@@ -141,8 +141,8 @@ var enrollmentKey = Key{
 	embeddedStruct: true,
 }
 
-var chainError = Key{
-	Key:  "ChainError",
+var errorChainItem = Key{
+	Key:  "ErrorChainItem",
 	Type: "<dictionary>",
 	SubKeys: []Key{
 		{Key: "ErrorCode", Type: "<integer>", Presence: "required"},
@@ -150,7 +150,23 @@ var chainError = Key{
 		{Key: "LocalizedDescription", Type: "<string>", Presence: "required"},
 		{Key: "USEnglishDescription", Type: "<string>", Presence: "required"},
 	},
-	Content:            "ChainError represents an error that occured on the client executing an MDM command.",
+	Content:            "ErrorChainItem represents an error that occured on the client executing an MDM command.",
+	includeContent:     true,
+	contentIsForStruct: true,
+}
+
+var enrollment = Key{
+	Key:  "Enrollment",
+	Type: "<dictionary>",
+	SubKeys: []Key{
+		{Key: "UDID", Type: "<string>", Presence: "optional"},
+		{Key: "UserID", Type: "<string>", Presence: "optional"},
+		{Key: "UserShortName", Type: "<string>", Presence: "optional"},
+		{Key: "UserLongName", Type: "<string>", Presence: "optional"},
+		{Key: "EnrollmentID", Type: "<string>", Presence: "optional"},
+		{Key: "EnrollmentUserID", Type: "<string>", Presence: "optional"},
+	},
+	Content:            "Enrollment represents the various enrollment-related data sent with responses.",
 	includeContent:     true,
 	contentIsForStruct: true,
 }
@@ -196,7 +212,7 @@ func (j *jenBuilder) createShared() {
 		Id("GetGenericResponse").Params().Op("*").Id("GenericResponse"),
 	)
 
-	// create a helper function to instantiate our our generic command
+	// create a helper function to instantiate our generic command
 	j.file.Comment("New" + cmd.Key + " creates a new generic Apple MDM command.")
 	j.file.Func().Id("New" + cmd.Key).Params(Id("requestType").String()).Op("*").Id(cmd.Key).Block(
 		Return(Op("&").Id(cmd.Key).Values(Dict{
@@ -235,22 +251,6 @@ func (j *jenBuilder) createShared() {
 		)
 
 		insertErrorChain(j)
-
-		enrollment := Key{
-			Key:  "Enrollment",
-			Type: "<dictionary>",
-			SubKeys: []Key{
-				{Key: "UDID", Type: "<string>", Presence: "optional"},
-				{Key: "UserID", Type: "<string>", Presence: "optional"},
-				{Key: "UserShortName", Type: "<string>", Presence: "optional"},
-				{Key: "UserLongName", Type: "<string>", Presence: "optional"},
-				{Key: "EnrollmentID", Type: "<string>", Presence: "optional"},
-				{Key: "EnrollmentUserID", Type: "<string>", Presence: "optional"},
-			},
-			Content:            "Enrollment represents the various enrollment-related data sent with responses.",
-			includeContent:     true,
-			contentIsForStruct: true,
-		}
 
 		j.handleKey(enrollment, "")
 
@@ -371,6 +371,8 @@ func (j *jenBuilder) walkResponse(keys []Key, name string) {
 	}
 	if j.noDependShared {
 		insertErrorChain(j)
+		j.handleKey(enrollment, "")
+
 		response.SubKeys = append(response.SubKeys,
 			commandUUIDKey,
 			statusKey,
