@@ -148,9 +148,13 @@ func insertErrorChain(j *jenBuilder) {
 			If(Id("s").Op("!=").Lit("")).Block(
 				Id("s").Op("+=").Lit(": "),
 			),
+			Id("errStr").Op(":=").Parens(Op("*").Id("ec")).Index(Id("i")).Dot("USEnglishDescription"),
+			If(Id("errStr").Op("==").Lit("")).Block(
+				Id("errStr").Op("=").Parens(Op("*").Id("ec")).Index(Id("i")).Dot("LocalizedDescription"),
+			),
 			Id("s").Op("+=").Qual("fmt", "Sprintf").Params(
 				Lit("%s (%s, %d)"),
-				Parens(Op("*").Id("ec")).Index(Id("i")).Dot("USEnglishDescription"),
+				Id("errStr"),
 				Parens(Op("*").Id("ec")).Index(Id("i")).Dot("ErrorDomain"),
 				Parens(Op("*").Id("ec")).Index(Id("i")).Dot("ErrorCode"),
 			),
