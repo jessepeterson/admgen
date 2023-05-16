@@ -120,23 +120,39 @@ var notConsKey = Key{
 }
 
 var errorChainKey = Key{
-	Key:      "ErrorChain",
-	Type:     "<array>",
-	Presence: "optional",
-	SubKeys: []Key{
-		{
-			Key:          "ErrorChain",
-			Type:         "ErrorChain",
-			forceRawType: true,
-		},
-	},
+	Key:          "ErrorChain",
+	Type:         "ErrorChain",
+	Presence:     "optional",
+	forceRawType: true,
 }
+
+func insertErrorChain(j *jenBuilder) {
+	j.handleKey(chainError, "")
+
+	j.file.Comment("ErrorChain represents any errors that occured on the client executing an MDM command.")
+	j.file.Type().Id("ErrorChain").Index().Id("ChainError")
+}
+
 var enrollmentKey = Key{
 	Key:            "Enrollment",
 	Type:           "Enrollment",
 	Presence:       "required",
 	forceRawType:   true,
 	embeddedStruct: true,
+}
+
+var chainError = Key{
+	Key:  "ChainError",
+	Type: "<dictionary>",
+	SubKeys: []Key{
+		{Key: "ErrorCode", Type: "<integer>", Presence: "required"},
+		{Key: "ErrorDomain", Type: "<string>", Presence: "required"},
+		{Key: "LocalizedDescription", Type: "<string>", Presence: "required"},
+		{Key: "USEnglishDescription", Type: "<string>", Presence: "required"},
+	},
+	Content:            "ChainError represents an error that occured on the client executing an MDM command.",
+	includeContent:     true,
+	contentIsForStruct: true,
 }
 
 func (j *jenBuilder) createShared() {
@@ -218,20 +234,7 @@ func (j *jenBuilder) createShared() {
 			Return(Id("newRespFn").Call()),
 		)
 
-		errorChain := Key{
-			Key:  "ErrorChain",
-			Type: "<dictionary>",
-			SubKeys: []Key{
-				{Key: "ErrorCode", Type: "<integer>", Presence: "required"},
-				{Key: "ErrorDomain", Type: "<string>", Presence: "required"},
-				{Key: "LocalizedDescription", Type: "<string>", Presence: "required"},
-				{Key: "USEnglishDescription", Type: "<string>", Presence: "required"},
-			},
-			Content:            "ErrorChain represents errors that occured on the client executing an MDM command.",
-			includeContent:     true,
-			contentIsForStruct: true,
-		}
-		j.handleKey(errorChain, "")
+		insertErrorChain(j)
 
 		enrollment := Key{
 			Key:  "Enrollment",
@@ -367,6 +370,7 @@ func (j *jenBuilder) walkResponse(keys []Key, name string) {
 		contentIsForStruct: true,
 	}
 	if j.noDependShared {
+		insertErrorChain(j)
 		response.SubKeys = append(response.SubKeys,
 			commandUUIDKey,
 			statusKey,
