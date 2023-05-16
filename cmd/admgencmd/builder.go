@@ -131,6 +131,32 @@ func insertErrorChain(j *jenBuilder) {
 
 	j.file.Comment("ErrorChain represents any errors that occured on the client executing an MDM command.")
 	j.file.Type().Id("ErrorChain").Index().Id("ErrorChainItem")
+
+	j.file.Comment("Error adapts a standard Go error for ErrorChain.")
+	j.file.Func().Params(
+		Id("ec").Op("*").Id("ErrorChain"),
+	).Id("Error").Params().String().Block(
+		If(Len(Op("*").Id("ec")).Op("<").Lit(1)).Block(
+			Return(Lit("no items in error chain")),
+		),
+		Var().Id("s").String(),
+		For(
+			Id("i").Op(":=").Len(Op("*").Id("ec")).Op("-").Lit(1),
+			Id("i").Op(">=").Lit(0),
+			Id("i").Op("--"),
+		).Block(
+			If(Id("s").Op("!=").Lit("")).Block(
+				Id("s").Op("+=").Lit(": "),
+			),
+			Id("s").Op("+=").Qual("fmt", "Sprintf").Params(
+				Lit("%s (%s, %d)"),
+				Parens(Op("*").Id("ec")).Index(Id("i")).Dot("USEnglishDescription"),
+				Parens(Op("*").Id("ec")).Index(Id("i")).Dot("ErrorDomain"),
+				Parens(Op("*").Id("ec")).Index(Id("i")).Dot("ErrorCode"),
+			),
+		),
+		Return(Id("s")),
+	)
 }
 
 var enrollmentKey = Key{
