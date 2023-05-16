@@ -296,6 +296,8 @@ func (j *jenBuilder) createShared() {
 		}
 
 		j.handleKey(response, "")
+
+		insertValidate(response.Key, j)
 	}
 }
 
@@ -385,6 +387,22 @@ func (j *jenBuilder) walkCommand(keys []Key, name string) {
 	}
 }
 
+func insertValidate(name string, j *jenBuilder) {
+	j.file.Comment("Validate checks for any command response errors.")
+	j.file.Func().Params(
+		Id("r").Op("*").Id(name),
+	).Id("Validate").Params().Error().Block(
+		If(Id("r").Dot("ErrorChain").Op("!=").Nil().Op("||").Parens(Id("r").Dot("Status").Op("!=").Lit("Acknowledged").Op("&&").Id("r").Dot("Status").Op("!=").Lit("Idle").Op("&&").Id("r").Dot("Status").Op("!=").Lit("NotNow"))).Block(
+			Return(Qual("fmt", "Errorf").Params(
+				Lit("MDM error for status %s: %w"),
+				Id("r").Dot("Status"),
+				Id("r").Dot("ErrorChain")),
+			),
+		),
+		Return(Nil()),
+	)
+}
+
 func (j *jenBuilder) walkResponse(keys []Key, name string) {
 	response := Key{
 		Key:     name + "Response",
@@ -419,6 +437,8 @@ func (j *jenBuilder) walkResponse(keys []Key, name string) {
 		)
 	}
 	j.handleKey(response, "")
+
+	insertValidate(response.Key, j)
 
 	if !j.noDependShared {
 		// create a helper method to return a copy of a generic command
