@@ -364,6 +364,9 @@ func (j *jenBuilder) walkCommand(keys []Key, name string) {
 		j.file.Func().Params(
 			Id("c").Op("*").Id(name+"Command"),
 		).Id("GenericCommand").Params().Op("*").Id("GenericCommand").Block(
+			If(Id("c").Op("==").Nil()).Block(
+				Return(Nil()),
+			),
 			Id("cmd").Op(":=").Id("NewGenericCommand").Call(Id("c.Command.RequestType")),
 			Id("cmd.CommandUUID").Op("=").Id("c.CommandUUID"),
 			Id("cmd.Command.RequestRequiresNetworkTether").Op("=").Id("c.Command.RequestRequiresNetworkTether"),
