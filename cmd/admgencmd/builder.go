@@ -247,11 +247,12 @@ func (j *jenBuilder) createShared() {
 
 	// create a helper function to instantiate our generic command
 	j.file.Comment("New" + cmd.Key + " creates a new generic Apple MDM command.")
-	j.file.Func().Id("New" + cmd.Key).Params(Id("requestType").String()).Op("*").Id(cmd.Key).Block(
+	j.file.Func().Id("New"+cmd.Key).Params(Id("requestType"), Id("uuid").String()).Op("*").Id(cmd.Key).Block(
 		Return(Op("&").Id(cmd.Key).Values(Dict{
 			Id("Command"): Id(payload.Key).Values(Dict{
 				Id("RequestType"): Id("requestType"),
 			}),
+			Id("CommandUUID"): Id("uuid"),
 		})),
 	)
 
@@ -367,8 +368,7 @@ func (j *jenBuilder) walkCommand(keys []Key, name string) {
 			If(Id("c").Op("==").Nil()).Block(
 				Return(Nil()),
 			),
-			Id("cmd").Op(":=").Id("NewGenericCommand").Call(Id("c.Command.RequestType")),
-			Id("cmd.CommandUUID").Op("=").Id("c.CommandUUID"),
+			Id("cmd").Op(":=").Id("NewGenericCommand").Call(Id("c.Command.RequestType"), Id("c.CommandUUID")),
 			Id("cmd.Command.RequestRequiresNetworkTether").Op("=").Id("c.Command.RequestRequiresNetworkTether"),
 			Return(Id("cmd")),
 		)
